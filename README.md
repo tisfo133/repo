@@ -39,7 +39,7 @@ git push -u origin onoma-tou-branch-mas
 1. Μπαίνουμε στο GitHub.
 2. Πατάμε το πράσινο κουμπί **Compare & pull request**.
 3. Περιμένουμε την έγκριση (Approve) από τουλάχιστον 1 μέλος της ομάδας.
-4. Αν όλα είναι καλά, πατάμε **Merge pull request** για να μπει ο κώδικας στο `main`.
+4. Αν όλα είναι καλά, πατάμε **Merge pull request** για να μπει ο κώδικας στο `main`. 
 5. Διαγράφουμε το branch μας.
 
-HELLO GUYS
+HELLO GUYS mitro is the best

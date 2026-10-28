@@ -1,22 +1,22 @@
 package common;
 
 public class ElevatorCommandDTO {
-    private int elevatorId;
+    private String elevatorId;
     private int targetFloor;
 
     public ElevatorCommandDTO() {
     }
 
-    public ElevatorCommandDTO(int elevatorId, int targetFloor) {
+    public ElevatorCommandDTO(String elevatorId, int targetFloor) {
         this.elevatorId = elevatorId;
         this.targetFloor = targetFloor;
     }
 
-    public int getElevatorId() {
+    public String getElevatorId() {
         return elevatorId;
     }
 
-    public void setElevatorId(int elevatorId) {
+    public void setElevatorId(String elevatorId) {
         this.elevatorId = elevatorId;
     }
 

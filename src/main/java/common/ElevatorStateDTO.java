@@ -1,26 +1,33 @@
 package common;
 
+import java.util.ArrayList;
+import java.util.List;
+
 public class ElevatorStateDTO {
-    private int elevatorId;
+    private String elevatorId;
     private int currentFloor;
     private Direction direction;
     private DoorState doorState;
+    private List<Integer> nextStops;
 
     public ElevatorStateDTO() {
+        this.nextStops = new ArrayList<>();
     }
 
-    public ElevatorStateDTO(int elevatorId, int currentFloor, Direction direction, DoorState doorState) {
+    public ElevatorStateDTO(String elevatorId, int currentFloor, Direction direction, DoorState doorState,
+            List<Integer> nextStops) {
         this.elevatorId = elevatorId;
         this.currentFloor = currentFloor;
         this.direction = direction;
         this.doorState = doorState;
+        this.nextStops = (nextStops != null) ? nextStops : new ArrayList<>();
     }
 
-    public int getElevatorId() {
+    public String getElevatorId() {
         return elevatorId;
     }
 
-    public void setElevatorId(int elevatorId) {
+    public void setElevatorId(String elevatorId) {
         this.elevatorId = elevatorId;
     }
 
@@ -46,5 +53,13 @@ public class ElevatorStateDTO {
 
     public void setDoorState(DoorState doorState) {
         this.doorState = doorState;
+    }
+
+    public List<Integer> getNextStops() {
+        return nextStops;
+    }
+
+    public void setNextStops(List<Integer> nextStops) {
+        this.nextStops = nextStops;
     }
 }

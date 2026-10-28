@@ -4,6 +4,12 @@ import common.DestinationCallDTO;
 import common.SystemConfig;
 import io.javalin.Javalin;
 
+// ΠΡΟΣΘΗΚΗ: Τα 4 απαραίτητα imports για την επικοινωνία δικτύου
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+
 public class CentralController {
 
     private static SystemConfig currentConfig;

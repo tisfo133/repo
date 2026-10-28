@@ -1,4 +1,4 @@
-package main.java.elevator;
+package elevator;
 public enum Direction {
     UP,
     DOWN,

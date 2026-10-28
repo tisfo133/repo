@@ -1,4 +1,4 @@
-package main.java.elevator;
+package elevator;
 /* Εξερχόμενη επαφή (Outbound REST Client Contract) για την επικοινωνία του συστήματοσ
 ελέγχου ανελκυστήρα με το υλικό (κινητήρα, θύρεσ, οθόνη)*/
 public interface HardwareBridgeClient {

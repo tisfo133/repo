@@ -1,4 +1,4 @@
-package main.java.elevator;
+package elevator;
 /* Εξερχόμενη διεπαφή (Outbound REST Client Contract)για την 
 αποστολή συμβάντων και μετρικών απόδοσης προσ το σύστημα
 δοκιμών και το σύστημα Αξιολόγησης*/

@@ -1,4 +1,4 @@
-package main.java.elevator;
+package elevator;
 //Κατάσταση θυρών ανελκυστήρα
 public enum DoorState {
     OPEN,

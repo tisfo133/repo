@@ -2,5 +2,7 @@ package common;
 
 public enum DoorState {
     OPEN,
-    CLOSED
+    OPENING,
+    CLOSED,
+    CLOSING
 }

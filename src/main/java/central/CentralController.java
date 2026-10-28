@@ -3,10 +3,6 @@ package central;
 import common.DestinationCallDTO;
 import common.SystemConfig;
 import io.javalin.Javalin;
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
 
 public class CentralController {
 
@@ -18,7 +14,6 @@ public class CentralController {
     public static void main(String[] args) {
 
         Javalin app = Javalin.create().start(7000);
-        System.out.println("Ο Central Controller τρέχει στο http://localhost:7000");
 
         app.post("/api/central/config", ctx -> {
             currentConfig = ctx.bodyAsClass(SystemConfig.class);

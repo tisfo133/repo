@@ -22,7 +22,7 @@ public class CentralController {
 
         Javalin app = Javalin.create().start(7000);
 
-        // Αποθηκεύει τις ρυθμίσεις που λαμβάνει το Central σε μορφή JSON.
+        // Αποθηκεύει τις ρυθμίσεις που λαμβάνει το Central σε μορφή JSON.Από evaluation.
         app.post("/api/central/config", ctx -> {
             currentConfig = ctx.bodyAsClass(SystemConfig.class);
             System.out.println("Ελήφθησαν ρυθμίσεις: από όροφο "
@@ -32,7 +32,7 @@ public class CentralController {
             ctx.status(200).result("Οι ρυθμίσεις αποθηκεύτηκαν επιτυχώς στο Central.");
         });
 
-        // Λαμβάνει αίτημα διαδρομής: όροφος παραλαβής (fromFloor) και προορισμός (toFloor).
+        // Λαμβάνει αίτημα διαδρομής: όροφος παραλαβής (fromFloor) και προορισμός (toFloor).Από ui.
         app.post("/api/central/request", ctx -> {
             // Το Javalin μετατρέπει το JSON του αιτήματος σε DestinationCallDTO.
             DestinationCallDTO request = ctx.bodyAsClass(DestinationCallDTO.class);

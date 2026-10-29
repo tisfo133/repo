@@ -1,3 +1,5 @@
+package evaluation;
+
 import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
@@ -10,32 +12,48 @@ import java.nio.charset.StandardCharsets;
 
 public class EvaluationApp {
 
+    // Μετρητές για τα στατιστικά αξιολόγησης της εκφώνησης
+    private static int totalRequests = 0;
+    private static int totalViolations = 0;
+
     public static void main(String[] args) throws IOException {
-        int port = 7002; // Η θύρα που συμφωνήσατε για το Evaluation
+        int port = 7002; // Προεπιλεγμένη θύρα
+
+        // Αν δοθεί όρισμα από τη γραμμή εντολών, το χρησιμοποιούμε ως θύρα
+        if (args.length > 0) {
+            try {
+                port = Integer.parseInt(args[0]);
+            } catch (NumberFormatException e) {
+                System.out.println("[EVALUATION WARNING] Μη έγκυρη θύρα στα ορίσματα. Χρήση προεπιλογής: 7002");
+            }
+        }
+
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         
-        // Προσαρμογή στο endpoint που έδωσε ο συνεργάτης σου
+        // Τυποποιημένη διεπαφή REST για τα metrics τηλεμετρίας
         server.createContext("/api/evaluation/metrics", new MetricsHandler());
         
         server.setExecutor(null); 
         server.start();
-        System.out.println("[EVALUATION SYSTEM] Ο Server τρέχει στη διεύθυνση http://localhost:" + port + "/api/evaluation/metrics");
+        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε επιτυχώς στη θύρα: " + port);
     }
 
     static class MetricsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
+                totalRequests++;
+                
                 InputStream requestBody = exchange.getRequestBody();
                 String jsonInput = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
                 
-                System.out.println("[EVALUATION LOG] Ελήφθησαν δεδομένα τηλεμετρίας: " + jsonInput);
+                System.out.println("[EVALUATION LOG] Αίτημα #" + totalRequests + " - Δεδομένα: " + jsonInput);
 
                 int passengers = 0;
                 boolean isOverloaded = false;
 
                 try {
-                    // Εξάγουμε το πεδίο "passengersOnboard" από το JSON του συνεργάτη σου
+                    // Εξάγουμε το πεδίο "passengersOnboard" από το JSON
                     int index = jsonInput.indexOf("passengersOnboard");
                     if (index != -1) {
                         int colonIndex = jsonInput.indexOf(":", index);
@@ -45,29 +63,23 @@ public class EvaluationApp {
                         String numStr = jsonInput.substring(colonIndex + 1, commaIndex).trim();
                         passengers = Integer.parseInt(numStr);
                         
+                        // Έλεγχος κανόνα ασφαλείας: μέγιστο όριο 8 επιβάτες
                         if (passengers > 8) {
                             isOverloaded = true;
+                            totalViolations++;
                         }
                     }
                 } catch (Exception e) {
-                    System.out.println("[EVALUATION ERROR] Σφάλμα στην ανάγνωση των επιβατών: " + e.getMessage());
+                    System.out.println("[EVALUATION ERROR] Σφάλμα ανάλυσης δεδομένων: " + e.getMessage());
                 }
 
                 String response;
                 if (isOverloaded) {
-                    System.out.println("[EVALUATION ALERT] ⚠️ ΠΑΡΑΒΑΣΗ ΧΩΡΗΤΙΚΟΤΗΤΑΣ: Υπάρχουν " + passengers + " άτομα (Όριο: 8)!");
+                    System.out.println("[EVALUATION ALERT] ⚠️ ΠΑΡΑΒΑΣΗ ΧΩΡΗΤΙΚΟΤΗΤΑΣ #" + totalViolations + ": Υπάρχουν " + passengers + " επιβάτες (Όριο: 8)!");
                     response = "{\"status\": \"FAILED\", \"violation\": \"CAPACITY_EXCEEDED\", \"message\": \"Overload detected! Max limit is 8 passengers.\"}";
                 } else {
-                    // Διαβάζουμε την ενέργεια (action) για να καταγράψουμε τι κάνει ο ανελκυστήρας
-                    if (jsonInput.contains("DOORS_CLOSED")) {
-                        System.out.println("[EVALUATION LOG] 🚪 Οι πόρτες έκλεισαν. Επιβάτες: " + passengers);
-                    } else if (jsonInput.contains("DOORS_OPEN")) {
-                        System.out.println("[EVALUATION LOG] 🚪 Οι πόρτες άνοιξαν. Επιβάτες: " + passengers);
-                    } else {
-                        System.out.println("[EVALUATION LOG] ✅ Καταγράφηκε ενέργεια ανελκυστήρα με " + passengers + " επιβάτες.");
-                    }
-                    
-                    response = "{\"status\": \"SUCCESS\", \"message\": \"Metrics recorded successfully.\"}";
+                    System.out.println("[EVALUATION LOG] ✅ Επιτυχής αξιολόγηση. Επιβάτες εντός ορίων: " + passengers);
+                    response = "{\"status\": \"SUCCESS\", \"message\": \"Metrics recorded successfully. Total requests: " + totalRequests + "\"}";
                 }
                 
                 exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");

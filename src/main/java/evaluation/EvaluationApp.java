@@ -4,6 +4,11 @@ import com.sun.net.httpserver.HttpServer;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpExchange;
 
+// Εισαγωγή των κοινών κλάσεων και enums από το πακέτο common της ομάδας
+import common.ElevatorStateDTO;
+import common.Direction;
+import common.DoorState;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -12,30 +17,29 @@ import java.nio.charset.StandardCharsets;
 
 public class EvaluationApp {
 
-    // Μετρητές για τα στατιστικά αξιολόγησης της εκφώνησης
     private static int totalRequests = 0;
     private static int totalViolations = 0;
 
     public static void main(String[] args) throws IOException {
-        int port = 7002; // Προεπιλεγμένη θύρα
+        int port = 7002; // Προεπιλεγμένη θύρα για το Evaluation
 
-        // Αν δοθεί όρισμα από τη γραμμή εντολών, το χρησιμοποιούμε ως θύρα
+        // Δυναμική ανάγνωση θύρας από τη γραμμή εντολών (απαίτηση εκφώνησης)
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (NumberFormatException e) {
-                System.out.println("[EVALUATION WARNING] Μη έγκυρη θύρα στα ορίσματα. Χρήση προεπιλογής: 7002");
+                System.out.println("[EVALUATION WARNING] Μη έγκυρη θύρα. Χρήση προεπιλογής: 7002");
             }
         }
 
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
         
-        // Τυποποιημένη διεπαφή REST για τα metrics τηλεμετρίας
+        // Τυποποιημένη διεπαφή REST για τα δεδομένα τηλεμετρίας και κατάστασης
         server.createContext("/api/evaluation/metrics", new MetricsHandler());
         
         server.setExecutor(null); 
         server.start();
-        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε επιτυχώς στη θύρα: " + port);
+        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε στη θύρα: " + port);
     }
 
     static class MetricsHandler implements HttpHandler {
@@ -53,7 +57,7 @@ public class EvaluationApp {
                 boolean isOverloaded = false;
 
                 try {
-                    // Εξάγουμε το πεδίο "passengersOnboard" από το JSON
+                    // Ελέγχουμε την ύπαρξη επιβατών στο payload
                     int index = jsonInput.indexOf("passengersOnboard");
                     if (index != -1) {
                         int colonIndex = jsonInput.indexOf(":", index);
@@ -63,7 +67,7 @@ public class EvaluationApp {
                         String numStr = jsonInput.substring(colonIndex + 1, commaIndex).trim();
                         passengers = Integer.parseInt(numStr);
                         
-                        // Έλεγχος κανόνα ασφαλείας: μέγιστο όριο 8 επιβάτες
+                        // Έλεγχος χωρητικότητας (όριο 8 άτομα)
                         if (passengers > 8) {
                             isOverloaded = true;
                             totalViolations++;

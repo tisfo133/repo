@@ -1,4 +1,4 @@
-package elevator;
+package common;
 //Παράμετροι διαμόρφωσης λειτουργίας του ανελκυστήρα (όροφοι και χρόνοι σε m/s)
 public record ElevatorConfigDto(
     int minFloor,

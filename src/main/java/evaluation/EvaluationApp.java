@@ -21,7 +21,7 @@ public class EvaluationApp {
     private static int totalViolations = 0;
 
     public static void main(String[] args) throws IOException {
-        int port = 7002; // Προεπιλεγμένη θύρα για το Evaluation
+        int port = 7001; // Προεπιλεγμένη θύρα για το Evaluation
 
         // Δυναμική ανάγνωση θύρας από τη γραμμή εντολών (απαίτηση εκφώνησης)
         if (args.length > 0) {

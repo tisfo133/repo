@@ -76,4 +76,22 @@ public class EvaluationMetricsRestClient implements EvaluationMetricsClient {
             System.out.println("Αποτυχία καταγραφής μετρικής: " + metricName);
         }
     }
+
+    // 1. Αποστολή Χρόνου Αναμονής (Πόσο περίμενε ο επιβάτης μέχρι να μπει)
+    public void sendWaitTimeMetric(double waitTimeSeconds) {
+        sendMetric("AVERAGE_WAIT_TIME_SEC", waitTimeSeconds);
+        System.out.println("Εστάλη μετρική αναμονής: " + waitTimeSeconds + "s");
+    }
+
+    // 2. Αποστολή Χρόνου Διαδρομής (Πόσο έκανε να φτάσει στον προορισμό του)
+    public void sendJourneyTimeMetric(double journeyTimeSeconds) {
+        sendMetric("AVERAGE_JOURNEY_TIME_SEC", journeyTimeSeconds);
+        System.out.println("Εστάλη μετρική διαδρομής: " + journeyTimeSeconds + "s");
+    }
+
+    // 3. Αποστολή Ενεργειακού Αποτυπώματος (Συνολικοί όροφοι που κινήθηκε)
+    public void sendEnergyEfficiencyMetric(int totalFloorsMoved) {
+        sendMetric("TOTAL_FLOORS_MOVED", totalFloorsMoved);
+        System.out.println("Εστάλη μετρική ενέργειας (όροφοι): " + totalFloorsMoved);
+    }
 }

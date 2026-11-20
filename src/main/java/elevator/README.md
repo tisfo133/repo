@@ -133,4 +133,19 @@
   "floorTravelTimeMs": 2500,
   "doorOperationTimeMs": 1500
 }
-```
+```### Outbound REST API Communication (Client Layer)
+
+Αυτό το υποσύστημα αναλαμβάνει όλη την εξερχόμενη επικοινωνία (outbound HTTP requests) του κεντρικού μας συστήματος με τον "έξω κόσμο". Χρησιμοποιεί τα κοινά αντικείμενα μεταφοράς δεδομένων της ομάδας (`ElevatorEventDto`, `ElevatorConfigDto` από το πακέτο `common`). 
+
+Αποτελείται από δύο βασικούς REST Clients:
+
+1. **HardwareBridgeRestClient**: 
+   Είναι ο μεσάζοντας επικοινωνίας με το hardware (ή τον προσομοιωτή) του ασανσέρ. Στέλνει τις βασικές εντολές κίνησης και λειτουργίας, όπως `openDoors()`, `closeDoors()`, `stop()`, `move(Direction)`, ενημερώνει τις οθόνες των ορόφων (`updateDisplay()`) και περνάει το αρχικό configuration.
+
+2. **EvaluationMetricsRestClient**: 
+   Αναλαμβάνει την αποστολή δεδομένων στο σύστημα αξιολόγησης. Στέλνει τα events και τα metrics (π.χ. χρόνους λειτουργίας) στον Evaluation Server, ώστε να είναι δυνατή η μέτρηση της απόδοσης του αλγορίθμου μας.
+
+#### Testing & Graceful Error Handling (TDD)
+Η ανάπτυξη των clients έγινε με βάση τη μεθοδολογία **Test-Driven Development (TDD)**, χρησιμοποιώντας το JUnit 5 (`HardwareBridgeRestClientTest` & `EvaluationMetricsRestClientTest`). 
+
+Βασική προτεραιότητα σε αυτή τη φάση ήταν η σταθερότητα του συστήματος. Τα tests επιβεβαιώνουν ότι σε περίπτωση που πέσει το δίκτυο ή το εξωτερικό API καθυστερεί να απαντήσει, οι clients μας διαχειρίζονται τα exceptions σωστά χωρίς να προκαλούν crash στον κεντρικό Elevator Controller.

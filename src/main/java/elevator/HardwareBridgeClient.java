@@ -1,6 +1,8 @@
 package elevator;
 import common.Direction;
 import common.DoorState;
+import common.ElevatorConfigDto;
+import common.ElevatorEventDto;
 /* Εξερχόμενη επαφή (Outbound REST Client Contract) για την επικοινωνία του συστήματοσ
 ελέγχου ανελκυστήρα με το υλικό (κινητήρα, θύρεσ, οθόνη)*/
 public interface HardwareBridgeClient {
@@ -28,4 +30,6 @@ public interface HardwareBridgeClient {
     JSON Request: { "elevatorId": "A", "currentFloor": 3, "direction": "UP" }
     */
     void updateDisplay(int currentFloor, Direction direction);
+    boolean sendElevatorEvent(ElevatorEventDto event);
+    boolean sendConfiguration(ElevatorConfigDto config);
     }

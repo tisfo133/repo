@@ -46,7 +46,7 @@
             <artifactId>jackson-databind</artifactId>
             <version>${jackson.version}</version>
         </dependency>
-
+        
         <!-- Logging Engine (SLF4J Simple Implementation) -->
         <dependency>
             <groupId>org.slf4j</groupId>

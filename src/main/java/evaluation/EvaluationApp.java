@@ -32,14 +32,26 @@ public class EvaluationApp {
             }
         }
 
+        startServer(port);
+    }
+
+    // Εκκίνηση του HTTP server (η θύρα 0 επιτρέπει αυτόματη επιλογή ελεύθερης θύρας στα unit tests)
+    static HttpServer startServer(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
-        
+
         // Τυποποιημένη διεπαφή REST για τα δεδομένα τηλεμετρίας και κατάστασης
         server.createContext("/api/evaluation/metrics", new MetricsHandler());
-        
-        server.setExecutor(null); 
+
+        server.setExecutor(null);
         server.start();
-        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε στη θύρα: " + port);
+        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε στη θύρα: " + server.getAddress().getPort());
+        return server;
+    }
+
+    // Μηδενισμός μετρητών για καθαρή απομόνωση σε κάθε unit test
+    static void resetMetrics() {
+        totalRequests = 0;
+        totalViolations = 0;
     }
 
     static class MetricsHandler implements HttpHandler {
@@ -47,10 +59,10 @@ public class EvaluationApp {
         public void handle(HttpExchange exchange) throws IOException {
             if ("POST".equals(exchange.getRequestMethod())) {
                 totalRequests++;
-                
+
                 InputStream requestBody = exchange.getRequestBody();
                 String jsonInput = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
-                
+
                 System.out.println("[EVALUATION LOG] Αίτημα #" + totalRequests + " - Δεδομένα: " + jsonInput);
 
                 int passengers = 0;
@@ -62,11 +74,13 @@ public class EvaluationApp {
                     if (index != -1) {
                         int colonIndex = jsonInput.indexOf(":", index);
                         int commaIndex = jsonInput.indexOf(",", colonIndex);
-                        if (commaIndex == -1) commaIndex = jsonInput.indexOf("}", colonIndex);
-                        
+                        if (commaIndex == -1) {
+                            commaIndex = jsonInput.indexOf("}", colonIndex);
+                        }
+
                         String numStr = jsonInput.substring(colonIndex + 1, commaIndex).trim();
                         passengers = Integer.parseInt(numStr);
-                        
+
                         // Έλεγχος χωρητικότητας (όριο 8 άτομα)
                         if (passengers > 8) {
                             isOverloaded = true;
@@ -85,13 +99,14 @@ public class EvaluationApp {
                     System.out.println("[EVALUATION LOG] ✅ Επιτυχής αξιολόγηση. Επιβάτες εντός ορίων: " + passengers);
                     response = "{\"status\": \"SUCCESS\", \"message\": \"Metrics recorded successfully. Total requests: " + totalRequests + "\"}";
                 }
-                
+
+                byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
                 exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-                exchange.sendResponseHeaders(200, response.getBytes().length);
-                
-                OutputStream os = exchange.getResponseBody();
-                os.write(response.getBytes());
-                os.close();
+                exchange.sendResponseHeaders(200, responseBytes.length);
+
+                try (OutputStream os = exchange.getResponseBody()) {
+                    os.write(responseBytes);
+                }
             } else {
                 exchange.sendResponseHeaders(405, -1); // Method Not Allowed
             }

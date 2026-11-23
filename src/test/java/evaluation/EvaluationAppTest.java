@@ -17,15 +17,16 @@ class EvaluationAppTest {
 
     private HttpServer server;
     private HttpClient client;
-    private String baseUrl;
+    private String baseHost;
+    private String metricsUrl;
 
     @BeforeEach
     void setUp() throws Exception {
         EvaluationApp.resetMetrics();
-        // Η θύρα 0 επιλέγει αυτόματα ελεύθερη θύρα ώστε να μην υπάρχουν συγκρούσεις
         server = EvaluationApp.startServer(0);
         int actualPort = server.getAddress().getPort();
-        baseUrl = "http://localhost:" + actualPort + "/api/evaluation/metrics";
+        baseHost = "http://localhost:" + actualPort;
+        metricsUrl = baseHost + "/api/evaluation/metrics";
         client = HttpClient.newHttpClient();
     }
 
@@ -39,7 +40,7 @@ class EvaluationAppTest {
     @Test
     void shouldAcceptNormalPassengerCount() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl))
+                .uri(URI.create(metricsUrl))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"passengersOnboard\": 5}"))
                 .build();
@@ -53,7 +54,7 @@ class EvaluationAppTest {
     @Test
     void shouldAllowExactCapacityLimitOfEightPassengers() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl))
+                .uri(URI.create(metricsUrl))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"passengersOnboard\": 8}"))
                 .build();
@@ -67,7 +68,7 @@ class EvaluationAppTest {
     @Test
     void shouldDetectCapacityViolationAboveEightPassengers() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl))
+                .uri(URI.create(metricsUrl))
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString("{\"passengersOnboard\": 9}"))
                 .build();
@@ -82,12 +83,68 @@ class EvaluationAppTest {
     @Test
     void shouldReturnMethodNotAllowedForGetRequest() throws Exception {
         HttpRequest request = HttpRequest.newBuilder()
-                .uri(URI.create(baseUrl))
+                .uri(URI.create(metricsUrl))
                 .GET()
                 .build();
 
         HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
 
         assertEquals(405, response.statusCode());
+    }
+
+    @Test
+    void shouldRecordPerformanceMetricFromElevator() throws Exception {
+        String payload = "{\"elevatorId\": \"A\", \"metricName\": \"DOOR_OPERATION_TIME_MS\", \"value\": 1500.0}";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(metricsUrl))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"status\": \"SUCCESS\""));
+    }
+
+    @Test
+    void shouldReturnBadRequestForInvalidJson() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(metricsUrl))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString("{invalid-json"))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(400, response.statusCode());
+    }
+
+    @Test
+    void shouldRecordElevatorEvent() throws Exception {
+        String payload = "{\"elevatorId\": \"A\", \"timestamp\": 1730712000000, \"eventType\": \"FLOOR_REACHED\", \"floor\": 4}";
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseHost + "/api/evaluation/events"))
+                .header("Content-Type", "application/json")
+                .POST(HttpRequest.BodyPublishers.ofString(payload))
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"totalEvents\": 1"));
+    }
+
+    @Test
+    void shouldReturnEvaluationSummary() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create(baseHost + "/api/evaluation/summary"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response = client.send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertEquals(200, response.statusCode());
+        assertTrue(response.body().contains("\"totalRequests\": 0"));
     }
 }

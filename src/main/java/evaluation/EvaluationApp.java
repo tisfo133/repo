@@ -1,115 +1,184 @@
 package evaluation;
 
-import com.sun.net.httpserver.HttpServer;
-import com.sun.net.httpserver.HttpHandler;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
-
-// Εισαγωγή των κοινών κλάσεων και enums από το πακέτο common της ομάδας
-import common.ElevatorStateDTO;
-import common.Direction;
-import common.DoorState;
+import com.sun.net.httpserver.HttpHandler;
+import com.sun.net.httpserver.HttpServer;
+import common.ElevatorEventDto;
 
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EvaluationApp {
 
-    private static int totalRequests = 0;
-    private static int totalViolations = 0;
+    private static final int DEFAULT_PORT = 7001;
+    private static final int MAX_PASSENGERS = 8;
+    private static final int THREAD_POOL_SIZE = 8;
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+    private static final AtomicInteger TOTAL_REQUESTS = new AtomicInteger(0);
+    private static final AtomicInteger TOTAL_VIOLATIONS = new AtomicInteger(0);
+    private static final AtomicInteger TOTAL_EVENTS = new AtomicInteger(0);
+
+    private static final List<ElevatorEventDto> RECORDED_EVENTS = new CopyOnWriteArrayList<>();
+    private static final Map<String, List<Double>> RECORDED_METRICS = new ConcurrentHashMap<>();
 
     public static void main(String[] args) throws IOException {
-        int port = 7001; // Προεπιλεγμένη θύρα για το Evaluation
+        int port = DEFAULT_PORT;
 
-        // Δυναμική ανάγνωση θύρας από τη γραμμή εντολών (απαίτηση εκφώνησης)
         if (args.length > 0) {
             try {
                 port = Integer.parseInt(args[0]);
             } catch (NumberFormatException e) {
-                System.out.println("[EVALUATION WARNING] Μη έγκυρη θύρα. Χρήση προεπιλογής: 7002");
+                System.out.println("[EVALUATION WARNING] Μη έγκυρη θύρα. Χρήση προεπιλογής: " + DEFAULT_PORT);
             }
         }
 
         startServer(port);
     }
 
-    // Εκκίνηση του HTTP server (η θύρα 0 επιτρέπει αυτόματη επιλογή ελεύθερης θύρας στα unit tests)
+    // Εκκίνηση του HTTP server (η θύρα 0 επιλέγει αυτόματα ελεύθερη θύρα στα unit tests)
     static HttpServer startServer(int port) throws IOException {
         HttpServer server = HttpServer.create(new InetSocketAddress(port), 0);
 
-        // Τυποποιημένη διεπαφή REST για τα δεδομένα τηλεμετρίας και κατάστασης
         server.createContext("/api/evaluation/metrics", new MetricsHandler());
+        server.createContext("/api/evaluation/events", new EventsHandler());
+        server.createContext("/api/evaluation/summary", new SummaryHandler());
 
-        server.setExecutor(null);
+        server.setExecutor(Executors.newFixedThreadPool(THREAD_POOL_SIZE));
         server.start();
-        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε στη θύρα: " + server.getAddress().getPort());
+        System.out.println("[EVALUATION SYSTEM] Ο Server αξιολόγησης ξεκίνησε στη θύρα: "
+                + server.getAddress().getPort());
         return server;
     }
 
-    // Μηδενισμός μετρητών για καθαρή απομόνωση σε κάθε unit test
+    // Μηδενισμός μετρητών και λιστών για απομόνωση σε κάθε unit test
     static void resetMetrics() {
-        totalRequests = 0;
-        totalViolations = 0;
+        TOTAL_REQUESTS.set(0);
+        TOTAL_VIOLATIONS.set(0);
+        TOTAL_EVENTS.set(0);
+        RECORDED_EVENTS.clear();
+        RECORDED_METRICS.clear();
+    }
+
+    private static void sendJsonResponse(HttpExchange exchange, int statusCode, String json) throws IOException {
+        byte[] responseBytes = json.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
+        exchange.sendResponseHeaders(statusCode, responseBytes.length);
+        try (OutputStream os = exchange.getResponseBody()) {
+            os.write(responseBytes);
+        }
     }
 
     static class MetricsHandler implements HttpHandler {
         @Override
         public void handle(HttpExchange exchange) throws IOException {
-            if ("POST".equals(exchange.getRequestMethod())) {
-                totalRequests++;
-
-                InputStream requestBody = exchange.getRequestBody();
-                String jsonInput = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
-
-                System.out.println("[EVALUATION LOG] Αίτημα #" + totalRequests + " - Δεδομένα: " + jsonInput);
-
-                int passengers = 0;
-                boolean isOverloaded = false;
-
-                try {
-                    // Ελέγχουμε την ύπαρξη επιβατών στο payload
-                    int index = jsonInput.indexOf("passengersOnboard");
-                    if (index != -1) {
-                        int colonIndex = jsonInput.indexOf(":", index);
-                        int commaIndex = jsonInput.indexOf(",", colonIndex);
-                        if (commaIndex == -1) {
-                            commaIndex = jsonInput.indexOf("}", colonIndex);
-                        }
-
-                        String numStr = jsonInput.substring(colonIndex + 1, commaIndex).trim();
-                        passengers = Integer.parseInt(numStr);
-
-                        // Έλεγχος χωρητικότητας (όριο 8 άτομα)
-                        if (passengers > 8) {
-                            isOverloaded = true;
-                            totalViolations++;
-                        }
-                    }
-                } catch (Exception e) {
-                    System.out.println("[EVALUATION ERROR] Σφάλμα ανάλυσης δεδομένων: " + e.getMessage());
-                }
-
-                String response;
-                if (isOverloaded) {
-                    System.out.println("[EVALUATION ALERT] ⚠️ ΠΑΡΑΒΑΣΗ ΧΩΡΗΤΙΚΟΤΗΤΑΣ #" + totalViolations + ": Υπάρχουν " + passengers + " επιβάτες (Όριο: 8)!");
-                    response = "{\"status\": \"FAILED\", \"violation\": \"CAPACITY_EXCEEDED\", \"message\": \"Overload detected! Max limit is 8 passengers.\"}";
-                } else {
-                    System.out.println("[EVALUATION LOG] ✅ Επιτυχής αξιολόγηση. Επιβάτες εντός ορίων: " + passengers);
-                    response = "{\"status\": \"SUCCESS\", \"message\": \"Metrics recorded successfully. Total requests: " + totalRequests + "\"}";
-                }
-
-                byte[] responseBytes = response.getBytes(StandardCharsets.UTF_8);
-                exchange.getResponseHeaders().set("Content-Type", "application/json; charset=UTF-8");
-                exchange.sendResponseHeaders(200, responseBytes.length);
-
-                try (OutputStream os = exchange.getResponseBody()) {
-                    os.write(responseBytes);
-                }
-            } else {
-                exchange.sendResponseHeaders(405, -1); // Method Not Allowed
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
             }
+
+            int reqNum = TOTAL_REQUESTS.incrementAndGet();
+            InputStream requestBody = exchange.getRequestBody();
+            String jsonInput = new String(requestBody.readAllBytes(), StandardCharsets.UTF_8);
+
+            System.out.println("[EVALUATION LOG] Αίτημα #" + reqNum + " - Δεδομένα: " + jsonInput);
+
+            JsonNode root;
+            try {
+                root = MAPPER.readTree(jsonInput);
+                if (root == null || !root.isObject()) {
+                    throw new IllegalArgumentException("Κενό ή μη έγκυρο JSON object.");
+                }
+            } catch (Exception e) {
+                System.out.println("[EVALUATION ERROR] Μη έγκυρο JSON: " + e.getMessage());
+                sendJsonResponse(exchange, 400,
+                        "{\"status\": \"ERROR\", \"message\": \"Invalid JSON payload\"}");
+                return;
+            }
+
+            // 1. Αποθήκευση μετρικών απόδοσης από το EvaluationMetricsClient (metricName + value)
+            if (root.has("metricName") && root.has("value") && root.get("value").isNumber()) {
+                String metricName = root.get("metricName").asText();
+                double value = root.get("value").asDouble();
+                RECORDED_METRICS.computeIfAbsent(metricName, k -> new CopyOnWriteArrayList<>()).add(value);
+                System.out.println("[EVALUATION METRIC] Καταγράφηκε " + metricName + " = " + value);
+            }
+
+            // 2. Έλεγχος χωρητικότητας επιβατών (όριο 8 άτομα)
+            int passengers = 0;
+            boolean isOverloaded = false;
+            if (root.has("passengersOnboard") && root.get("passengersOnboard").isNumber()) {
+                passengers = root.get("passengersOnboard").asInt();
+                if (passengers > MAX_PASSENGERS) {
+                    isOverloaded = true;
+                    TOTAL_VIOLATIONS.incrementAndGet();
+                }
+            }
+
+            String response;
+            if (isOverloaded) {
+                System.out.println("[EVALUATION ALERT] ΠΑΡΑΒΑΣΗ ΧΩΡΗΤΙΚΟΤΗΤΑΣ #" + TOTAL_VIOLATIONS.get()
+                        + ": " + passengers + " επιβάτες (Όριο: " + MAX_PASSENGERS + ")");
+                response = "{\"status\": \"FAILED\", \"violation\": \"CAPACITY_EXCEEDED\", "
+                        + "\"message\": \"Overload detected! Max limit is " + MAX_PASSENGERS + " passengers.\"}";
+            } else {
+                System.out.println("[EVALUATION LOG] Επιτυχής αξιολόγηση. Επιβάτες εντός ορίων: " + passengers);
+                response = "{\"status\": \"SUCCESS\", \"message\": \"Metrics recorded successfully. "
+                        + "Total requests: " + reqNum + "\"}";
+            }
+
+            sendJsonResponse(exchange, 200, response);
+        }
+    }
+
+    static class EventsHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"POST".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            String jsonInput = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            try {
+                ElevatorEventDto event = MAPPER.readValue(jsonInput, ElevatorEventDto.class);
+                RECORDED_EVENTS.add(event);
+                int count = TOTAL_EVENTS.incrementAndGet();
+                System.out.println("[EVALUATION EVENT #" + count + "] " + event);
+                sendJsonResponse(exchange, 200,
+                        "{\"status\": \"SUCCESS\", \"message\": \"Event recorded\", \"totalEvents\": " + count + "}");
+            } catch (Exception e) {
+                System.out.println("[EVALUATION ERROR] Μη έγκυρο ElevatorEventDto: " + e.getMessage());
+                sendJsonResponse(exchange, 400,
+                        "{\"status\": \"ERROR\", \"message\": \"Invalid ElevatorEventDto JSON\"}");
+            }
+        }
+    }
+
+    static class SummaryHandler implements HttpHandler {
+        @Override
+        public void handle(HttpExchange exchange) throws IOException {
+            if (!"GET".equals(exchange.getRequestMethod())) {
+                exchange.sendResponseHeaders(405, -1);
+                return;
+            }
+
+            String json = "{\"totalRequests\": " + TOTAL_REQUESTS.get()
+                    + ", \"totalViolations\": " + TOTAL_VIOLATIONS.get()
+                    + ", \"totalEvents\": " + TOTAL_EVENTS.get()
+                    + ", \"recordedMetricTypes\": " + RECORDED_METRICS.size() + "}";
+            sendJsonResponse(exchange, 200, json);
         }
     }
 }

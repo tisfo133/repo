@@ -12,13 +12,13 @@ class HardwareBridgeRestClientTest {
 
     @Test
     void testSendElevatorEvent_HandlesNetworkError() {
-        ElevatorEventDto event = new ElevatorEventDto();
+        ElevatorEventDto event = new ElevatorEventDto('A', System.currentTimeMillis(), "FLOOR_REACHED", 1);
         assertFalse(client.sendElevatorEvent(event));
     }
 
     @Test
     void testSendConfiguration_HandlesNetworkError() {
-        ElevatorConfigDto config = new ElevatorConfigDto();
+        ElevatorConfigDto config = new ElevatorConfigDto(0, 10, 2500, 1500);
         assertFalse(client.sendConfiguration(config));
     }
 

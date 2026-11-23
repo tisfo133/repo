@@ -58,4 +58,27 @@ class CentralServiceTest {
         assertThrows(IllegalArgumentException.class,
                 () -> service.assignCall(new DestinationCallDTO(0, 15)));
     }
+
+    @Test
+    void rejectsSameOriginAndDestinationFloor() {
+        SystemConfig config = new SystemConfig(0, 10, 3, 7000);
+        CentralService service = new CentralService(config);
+
+        assertThrows(IllegalArgumentException.class,
+                () -> service.assignCall(new DestinationCallDTO(4, 4)));
+    }
+
+    @Test
+    void prefersElevatorMovingInSameDirection() {
+        SystemConfig config = new SystemConfig(0, 10, 2, 7000);
+        CentralService service = new CentralService(config);
+
+        service.updateElevatorState("A",
+                new ElevatorStateDTO("A", 3, Direction.UP, DoorState.CLOSED, List.of(6)));
+        service.updateElevatorState("B",
+                new ElevatorStateDTO("B", 7, Direction.UP, DoorState.CLOSED, List.of(9)));
+
+        ElevatorInfo assigned = service.assignCall(new DestinationCallDTO(5, 9));
+        assertEquals("A", assigned.getElevatorId());
+    }
 }

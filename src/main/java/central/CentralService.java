@@ -54,6 +54,9 @@ public class CentralService {
         if (!current.isFloorValid(call.getFromFloor()) || !current.isFloorValid(call.getToFloor())) {
             throw new IllegalArgumentException("Μη έγκυρος όροφος για τις τρέχουσες ρυθμίσεις.");
         }
+        if (call.getFromFloor() == call.getToFloor()) {
+            throw new IllegalArgumentException("Ο όροφος αφετηρίας και προορισμού δεν μπορεί να είναι ίδιος.");
+        }
 
         ElevatorInfo chosen = selectBestElevator(call);
         chosen.assignTrip(call.getFromFloor(), call.getToFloor());

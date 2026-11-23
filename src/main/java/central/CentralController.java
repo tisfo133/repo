@@ -1,95 +1,108 @@
 package central;
 
 import common.DestinationCallDTO;
+import common.ElevatorStateDTO;
 import common.SystemConfig;
 import io.javalin.Javalin;
+import picocli.CommandLine;
+import picocli.CommandLine.Option;
 
-// ΠΡΟΣΘΗΚΗ: Τα 4 απαραίτητα imports για την επικοινωνία δικτύου
-import java.net.URI;
-import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
-import java.net.http.HttpResponse;
+import java.util.concurrent.Callable;
 
-public class CentralController {
+/**
+ * Κεντρικός REST Controller και σημείο εκκίνησης (CLI) του συστήματος Central Dispatch.
+ */
+public class CentralController implements Callable<Integer> {
 
-    // Οι ρυθμίσεις που έστειλε ο client. Παραμένουν null μέχρι να κληθεί το endpoint /config.
-    private static SystemConfig currentConfig;
-    
-    // ΕΠΑΝΑΦΟΡΑ: Το εργαλείο για να στέλνουμε εμείς εντολές στα ασανσέρ
-    private static final HttpClient httpClient = HttpClient.newHttpClient();
+    @Option(names = {"-p", "--port"}, description = "Θύρα ακρόασης Central", defaultValue = "7000")
+    private int port;
+
+    @Option(names = {"-e", "--elevators"}, description = "Πλήθος ανελκυστήρων (2-20)", defaultValue = "4")
+    private int numElevators;
+
+    @Option(names = {"--min-floor"}, description = "Κατώτερος όροφος", defaultValue = "0")
+    private int minFloor;
+
+    @Option(names = {"--max-floor"}, description = "Ανώτερος όροφος", defaultValue = "10")
+    private int maxFloor;
+
+    private final CentralService centralService;
+    private final ElevatorRestClient elevatorClient;
+
+    public CentralController() {
+        this.centralService = new CentralService();
+        this.elevatorClient = new ElevatorRestClient();
+    }
 
     public static void main(String[] args) {
+        int exitCode = new CommandLine(new CentralController()).execute(args);
+        if (exitCode != 0) {
+            System.exit(exitCode);
+        }
+    }
 
-        Javalin app = Javalin.create().start(7000);
+    @Override
+    public Integer call() {
+        SystemConfig initialConfig = new SystemConfig(minFloor, maxFloor, numElevators, port);
+        centralService.configure(initialConfig);
 
-        // Αποθηκεύει τις ρυθμίσεις που λαμβάνει το Central σε μορφή JSON.Από evaluation.
+        Javalin app = Javalin.create().start(port);
+        System.out.println("Central Controller τρέχει στη θύρα " + port
+                + " (" + numElevators + " ανελκυστήρες, όροφοι " + minFloor + ".." + maxFloor + ")");
+
+        // 1. Δυναμική παραμετροποίηση από Evaluation / Admin
         app.post("/api/central/config", ctx -> {
-            currentConfig = ctx.bodyAsClass(SystemConfig.class);
-            System.out.println("Ελήφθησαν ρυθμίσεις: από όροφο "
-                    + currentConfig.getMinFloor() + " έως όροφο "
-                    + currentConfig.getMaxFloor() + ", "
-                    + currentConfig.getNumElevators() + " ασανσέρ.");
-            ctx.status(200).result("Οι ρυθμίσεις αποθηκεύτηκαν επιτυχώς στο Central.");
+            try {
+                SystemConfig newConfig = ctx.bodyAsClass(SystemConfig.class);
+                centralService.configure(newConfig);
+                System.out.println("Ελήφθησαν νέες ρυθμίσεις: όροφοι "
+                        + newConfig.getMinFloor() + "-" + newConfig.getMaxFloor()
+                        + ", " + newConfig.getNumElevators() + " ασανσέρ.");
+                ctx.status(200).result("Οι ρυθμίσεις αποθηκεύτηκαν επιτυχώς στο Central.");
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).result("Μη έγκυρες ρυθμίσεις: " + e.getMessage());
+            }
         });
 
-        // Λαμβάνει αίτημα διαδρομής: όροφος παραλαβής (fromFloor) και προορισμός (toFloor).Από ui.
+        // 2. Αίτημα μετακίνησης επιβάτη από FloorUI
         app.post("/api/central/request", ctx -> {
-            // Το Javalin μετατρέπει το JSON του αιτήματος σε DestinationCallDTO.
             DestinationCallDTO request = ctx.bodyAsClass(DestinationCallDTO.class);
             System.out.println("Νέα κλήση: Από όροφο " + request.getFromFloor()
                     + " προς " + request.getToFloor());
 
-            // Ο νέος έλεγχος εγκυρότητας ορόφων της ομάδας
-            if (currentConfig != null) {
-                if (!currentConfig.isFloorValid(request.getFromFloor())
-                        || !currentConfig.isFloorValid(request.getToFloor())) {
-                    ctx.status(400).result("Μη έγκυρος όροφος.");
-                    return;
+            try {
+                // Συγχρονισμός κατάστασης από τους ενεργούς ανελκυστήρες πριν την επιλογή
+                for (ElevatorInfo info : centralService.getAllElevators()) {
+                    elevatorClient.fetchElevatorState(info)
+                            .ifPresent(state -> centralService.updateElevatorState(info.getElevatorId(), state));
                 }
+
+                ElevatorInfo assigned = centralService.assignCall(request);
+                String assignedId = assigned.getElevatorId();
+
+                // Αποστολή στάσης παραλαβής (αν δεν είναι ήδη εκεί) και προορισμού
+                if (assigned.getCurrentFloor() != request.getFromFloor()) {
+                    elevatorClient.sendStopCommand(assigned, request.getFromFloor());
+                }
+                elevatorClient.sendStopCommand(assigned, request.getToFloor());
+
+                ctx.status(200).result(assignedId);
+            } catch (IllegalArgumentException e) {
+                ctx.status(400).result(e.getMessage());
             }
-
-            // Προσωρινή ανάθεση: χρησιμοποιείται πάντα το ασανσέρ A.
-            // TODO: Επιλογή κατάλληλου διαθέσιμου ασανσέρ με βάση την κατάστασή του
-            // και το πλήθος ασανσέρ που δηλώνει το SystemConfig.
-            String assignedElevator = "A";
-
-            // ΕΠΑΝΑΦΟΡΑ: Στέλνουμε την εντολή στο ασανσέρ
-            // Στέλνουμε πρώτα την παραλαβή και μετά τον προορισμό.
-            // TODO: Να διασφαλιστεί ότι ο προορισμός δεν θα εκτελεστεί πριν την παραλαβή,
-            // π.χ. με ενιαίο αίτημα διαδρομής ή με επιβεβαίωση άφιξης στον όροφο παραλαβής.
-            sendElevatorCommand(assignedElevator, request.getFromFloor());
-            sendElevatorCommand(assignedElevator, request.getToFloor());
-
-            // Επιστρέφουμε το ID του ασανσέρ στο οποίο ανατέθηκε η κλήση.
-            ctx.status(200).result(assignedElevator);
         });
+
+        // 3. Ενημέρωση κατάστασης από ανελκυστήρα
+        app.post("/api/central/elevators/{id}/status", ctx -> {
+            String id = ctx.pathParam("id");
+            ElevatorStateDTO state = ctx.bodyAsClass(ElevatorStateDTO.class);
+            centralService.updateElevatorState(id, state);
+            ctx.status(200).result("OK");
+        });
+
+        // 4. Προβολή κατάστασης όλων των ανελκυστήρων
+        app.get("/api/central/elevators", ctx -> ctx.json(centralService.getAllElevators()));
+
+        return 0;
     }
-
-    // ΕΠΑΝΑΦΟΡΑ: Η βοηθητική μέθοδος αποστολής - ΤΩΡΑ ΜΕ JSON!
-    private static void sendElevatorCommand(String elevatorId, int targetFloor) {
-        try {
-            String url = "http://localhost:7002/api/elevator/" + elevatorId + "/stop";
-            
-            // Φτιάχνουμε το JSON "με το χέρι" για να ταιριάζει ακριβώς
-            // στο ElevatorCommandDTO που περιμένει η ομάδα του Elevator.
-            // TODO: Να χρησιμοποιηθεί serializer αντί για χειροκίνητη δημιουργία JSON,
-            // αν προστεθούν πεδία ή πιο σύνθετα δεδομένα στην εντολή.
-            String jsonBody = "{\"elevatorId\":\"" + elevatorId + "\", \"targetFloor\":" + targetFloor + "}";
-
-            HttpRequest request = HttpRequest.newBuilder()
-                    .uri(URI.create(url))
-                    // ΠΡΟΣΘΗΚΗ: Λέμε στο Elevator ότι του στέλνουμε JSON
-                    .header("Content-Type", "application/json")
-                    // Στέλνουμε το JSON που μόλις φτιάξαμε
-                    .POST(HttpRequest.BodyPublishers.ofString(jsonBody))
-                    .build();
-
-            // TODO: Έλεγχος του status code και αναφορά αποτυχίας στο endpoint /request.
-            httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            System.out.println("Δόθηκε εντολή στο ασανσέρ " + elevatorId + " να πάει στον όροφο " + targetFloor);
-            
-        } catch (Exception e) {
-            // Καταγράφουμε αποτυχίες σύνδεσης ή αποστολής του HTTP αιτήματος.
-            System.out.println("Σφάλμα επικοινωνίας με το ασανσέρ " + elevatorId + ": " + e.getMessage());
-        }
-    }
+}

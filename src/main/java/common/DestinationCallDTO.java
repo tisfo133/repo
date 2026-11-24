@@ -1,5 +1,7 @@
 package common;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+
 public class DestinationCallDTO {
     private int fromFloor;
     private int toFloor;
@@ -33,6 +35,7 @@ public class DestinationCallDTO {
      *
      * @return Direction.UP, Direction.DOWN or Direction.IDLE
      */
+    @JsonIgnore
     public Direction getDirection() {
         if (toFloor > fromFloor) {
             return Direction.UP;

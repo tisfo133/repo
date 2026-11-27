@@ -1,6 +1,6 @@
 package common;
 
-public class SystemConfig {
+public final class SystemConfig {
 
     public static final int ABSOLUTE_MIN_ELEVATORS = 2;
     public static final int ABSOLUTE_MAX_ELEVATORS = 20;

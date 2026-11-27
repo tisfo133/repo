@@ -20,7 +20,7 @@
             this.currentFloor = currentFloor;
             this.direction = direction;
             this.doorState = doorState;
-            this.nextStops = (nextStops != null) ? nextStops : new ArrayList<>();
+            this.nextStops = (nextStops != null) ? new ArrayList<>(nextStops) : new ArrayList<>();
         }
 
         public String getElevatorId() {
@@ -56,10 +56,10 @@
         }
 
         public List<Integer> getNextStops() {
-            return nextStops;
+            return new ArrayList<>(nextStops);
         }
 
         public void setNextStops(List<Integer> nextStops) {
-            this.nextStops = nextStops;
+            this.nextStops = (nextStops != null) ? new ArrayList<>(nextStops) : new ArrayList<>();
                 }
     }
